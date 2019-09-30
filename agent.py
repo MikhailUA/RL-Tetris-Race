@@ -9,7 +9,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 global team_name, folder, env_name
-team_name = 'ml_team # N' # TODO: change your team name
+team_name = 'ml_team # N4' # TODO: change your team name
 folder = 'tetris_race_qlearning'
 env_name = 'TetrisRace-v0' # do not change this
 
@@ -37,7 +37,7 @@ class TetrisRaceQLearningAgent:
 
         self.wall_iterator = env.unwrapped.wall_iterator # passed walls counter
 
-        self.q_table = None
+        self.q_table = np.empty((0,3))
 
     def choose_action(self, observation):
         # =============== TODO: Your code here ===============
@@ -46,8 +46,20 @@ class TetrisRaceQLearningAgent:
         #  agent behavior in unknown world conditions and main motivation is explore world.
         #  Exploitation rate - choose already known actions and moving through known states.
         #  Think about right proportion that parameters for better solution
-        self.check_state_exist(observation)
-        action = np.random.choice(self.actions)
+        
+        g_state = observation[2]
+        self.check_state_exist(g_state)
+        
+        q_tbl = self.q_table
+        qSA_idx = np.where((q_tbl[:,0] == g_state) == True)[0][0]
+        #print(q_tbl[qSA_idx][1])
+
+        action = 0
+
+        if (q_tbl[qSA_idx][1] < q_tbl[qSA_idx][2]):
+            action = 1
+
+        #action = np.random.choice(self.actions)
 
         return action
 
@@ -59,8 +71,23 @@ class TetrisRaceQLearningAgent:
         #  'Q-value' can become 'better' or 'worsen'. So,
         #   an agent can update knowledge about env, updating Q-table.
         #   Remember that agent should choose max of Q-value in  each step
-        self.check_state_exist(state_)
-        self.q_table = None
+        self.check_state_exist(state_[2])
+
+        #update q table val for state (prev) / state_ (new)
+        g_state = state[2]
+        g_state_ = state_[2]
+        q_tbl = self.q_table
+
+        qSA = q_tbl[q_tbl[:,0] == g_state, ][0] # 
+        qSA_idx = np.where((q_tbl[:,0] == g_state) == True)[0][0]
+        
+        qSA_ = q_tbl[q_tbl[:,0] == g_state_, ][0] # 
+        # print(self.learning_rate)
+        action_value = qSA[action + 1] + self.learning_rate / 100 * (reward + self.discount_factor / 100 * max(qSA_[1], qSA_[2]) - qSA[action + 1])
+        self.q_table[qSA_idx, action + 1] = action_value
+
+        #print(reward)
+        #self.q_table = None       
 
         return self.q_table
 
@@ -68,6 +95,12 @@ class TetrisRaceQLearningAgent:
         # =============== TODO: Your code here ===============
         #  Here agent can write to Q-table new data vector if current
         #  state is unknown for the moment
+
+        q_tbl = self.q_table
+
+        if (len(q_tbl[q_tbl[:,0] == state, 0]) == 0):
+            self.q_table = np.vstack((q_tbl, np.array([state,0,0])))
+
         pass
 
 
@@ -144,11 +177,10 @@ class EpisodeHistory:
         # Update rolling mean plot.
         mean_kernel_size = 101
         rolling_mean_data = np.concatenate((np.zeros(mean_kernel_size), self.lengths[plot_left_edge:episode_index]))
-        rolling_means = pd.rolling_mean(
-            rolling_mean_data,
+        rolling_means = pd.Series(
+            rolling_mean_data).rolling(
             window=mean_kernel_size,
-            min_periods=0
-        )[mean_kernel_size:]
+            min_periods=0).mean()[mean_kernel_size:]
         self.mean_plot.set_xdata(range(plot_left_edge, plot_left_edge + len(rolling_means)))
         self.mean_plot.set_ydata(rolling_means)
 
@@ -201,8 +233,8 @@ class Controler:
             env = gym.make(env_name)
             env.seed(random_state)
             np.random.seed(random_state)
-            lr = 10
-            df = 10
+            lr = 90
+            df = 3
             exr = 10
             exrd = 10
 
@@ -226,6 +258,7 @@ class Controler:
 
     def run_agent(self, rate, factor, exploration, exp_decay, env, verbose=False):
         max_episodes_to_run = env.unwrapped.total_episodes
+        max_episodes_to_run = 10000
         max_timesteps_per_episode = env.unwrapped.walls_num
 
         goal_avg_episode_length = env.unwrapped.walls_num
@@ -298,6 +331,7 @@ class Controler:
                     timestep_index += 1
         print("Goal not reached after {} episodes.".format(max_episodes_to_run))
         end_index = max_episodes_to_run
+        #print(agent.q_table)
         return episode_history, end_index
 
     def done_manager(self, episode_ind, plt, top, mode):
