@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import time
 import pickle
 import warnings
+import random as rnd
 warnings.filterwarnings("ignore")
 
 global team_name, folder, env_name
@@ -36,34 +37,46 @@ class TetrisRaceQLearningAgent:
         #  of each action, which agent can do in current env.
 
         self.wall_iterator = env.unwrapped.wall_iterator # passed walls counter
+        
+        self.screen_width = env.screen_width
 
-        self.q_table = np.empty((0,3))
+
+        self.q_table = np.empty((0,2))
 
     def choose_action(self, observation):
         # =============== TODO: Your code here ===============
-        #  Here agent must choose action on each step, solving exploration-exploitation
-        #  trade-off. Remember that in general exploration rate is responsible for
+        #  Here agent must choose action on each step, 
+        #  solving exploration-exploitation trade-off. 
+
+        #  Remember that in general exploration rate is responsible for
         #  agent behavior in unknown world conditions and main motivation is explore world.
         #  Exploitation rate - choose already known actions and moving through known states.
         #  Think about right proportion that parameters for better solution
         
-        g_state = observation[2]
-        self.check_state_exist(g_state)
-        
-        q_tbl = self.q_table
-        qSA_idx = np.where((q_tbl[:,0] == g_state) == True)[0][0]
-        #print(q_tbl[qSA_idx][1])
+
+        state_id = observation[2]
+
+        if (self.is_state_exists(state_id) == False):
+            self.add_new_state(state_id)
+
+        state = self.get_state(state_id)
 
         action = 0
+        # idx 1 left, idx 2 right
+        
+        if (state[1] == state[2]):
+            action = rnd.randint(0, 1)
+            #print("RND action")
 
-        if (q_tbl[qSA_idx][1] < q_tbl[qSA_idx][2]):
+        if (state[1] < state[2]): # select action with max value
             action = 1
+            #print("MAX")
 
         #action = np.random.choice(self.actions)
 
-        return action
+        return action 
 
-    def act(self, state, action, reward, state_):
+    def update_q_table(self, state, action, reward, state_):
         # =============== TODO: Your code here ===============
         #  Here agent takes action('moves' somewhere), knowing
         #  the value of Q - table, corresponds current state.
@@ -74,21 +87,29 @@ class TetrisRaceQLearningAgent:
         self.check_state_exist(state_[2])
 
         #update q table val for state (prev) / state_ (new)
-        g_state = state[2]
+        g_state  = state[2]
         g_state_ = state_[2]
         q_tbl = self.q_table
 
-        qSA = q_tbl[q_tbl[:,0] == g_state, ][0] # 
-        qSA_idx = np.where((q_tbl[:,0] == g_state) == True)[0][0]
+        #print("old")
+        #print(g_state)
+
+        #print("new")
+        #print(g_state_)
+
+        qSA = q_tbl[q_tbl[:,0] == g_state, ][0] # get state values for current state
+        qSA_idx = np.where((q_tbl[:,0] == g_state) == True)[0][0] # get q_table idx for current state
+        #print("q_table idx")
+        #print(qSA_idx)
         
-        qSA_ = q_tbl[q_tbl[:,0] == g_state_, ][0] # 
-        # print(self.learning_rate)
+        qSA_ = q_tbl[q_tbl[:,0] == g_state_, ][0] # get state values for next state
+        #print(qSA)
+        #print(qSA[1])
+        #print(qSA[2])
         action_value = qSA[action + 1] + self.learning_rate / 100 * (reward + self.discount_factor / 100 * max(qSA_[1], qSA_[2]) - qSA[action + 1])
-        self.q_table[qSA_idx, action + 1] = action_value
 
-        #print(reward)
-        #self.q_table = None       
-
+        self.q_table[qSA_idx, action + 1] = action_value        
+       
         return self.q_table
 
     def check_state_exist(self, state):
@@ -98,10 +119,36 @@ class TetrisRaceQLearningAgent:
 
         q_tbl = self.q_table
 
+
         if (len(q_tbl[q_tbl[:,0] == state, 0]) == 0):
+        #    print("STATE NEW")
             self.q_table = np.vstack((q_tbl, np.array([state,0,0])))
+        #else:
+        #    print("STATE exists")
 
         pass
+
+#==========================================================================================================
+#==========================================================================================================
+#==========================================================================================================
+
+    def is_state_exists(self, state_id):
+        q_tbl = self.q_table
+        if (len(q_tbl[q_tbl[:,0] == state_id, 0]) > 0):
+            return True
+        return False
+
+    def add_new_state(self, state_id):
+        if (self.is_state_exists(state_id)):
+            raise Exception("State already exists")
+        self.q_table = np.vstack((self.q_table, np.array([state_id, 0, 0])))
+
+    def get_state(self, state_id):
+        if (self.is_state_exists(state_id) == False):
+            raise Exception("State does not exists")
+        return self.q_table[self.q_table[:,0] == state_id, ][0]
+
+
 
 
 class EpisodeHistory:
@@ -139,7 +186,7 @@ class EpisodeHistory:
         self.lengths[episode_index] = episode_length
 
     def create_plot(self):
-        self.fig, self.ax = plt.subplots(figsize=(14, 7), facecolor='w', edgecolor='k')
+        self.fig, self.ax = plt.subplots(figsize=(3, 3), facecolor='w', edgecolor='k')
         self.fig.canvas.set_window_title("Episode Length History. Team {}".format(team_name))
 
         self.ax.set_xlim(0, self.plot_episode_count + 5)
@@ -186,7 +233,7 @@ class EpisodeHistory:
 
         # Repaint the surface.
         plt.draw()
-        plt.pause(0.0001)
+        plt.pause(0.001)
 
     def is_goal_reached(self, episode_index):
         ''' DO NOT CHANGE THIS FUNCTION CODE.'''
@@ -209,6 +256,8 @@ class Controler:
         random_state = 0
         self.agent_history = []
         self.history_f = True
+        self.learning_rate = 100
+        self.discount_factor = 70
 
         self.window = 50
 
@@ -231,13 +280,14 @@ class Controler:
             # optimizing the solution.
 
             env = gym.make(env_name)
+            env.__init__(episodes_to_run = episodes_num)
             env.seed(random_state)
             np.random.seed(random_state)
-            lr = 90
-            df = 3
+            lr = self.learning_rate
+            df = self.discount_factor
             exr = 10
             exrd = 10
-
+            print(env.screen_width)
             self.env = gym.wrappers.Monitor(env, self.exp_dir + '/video', force=True, resume=False,
                                             video_callable=self.video_callable)
             episode_history, end_index = self.run_agent(self, lr, df, exr, exrd, self.env,
@@ -258,7 +308,7 @@ class Controler:
 
     def run_agent(self, rate, factor, exploration, exp_decay, env, verbose=False):
         max_episodes_to_run = env.unwrapped.total_episodes
-        max_episodes_to_run = 10000
+        #max_episodes_to_run = 10000
         max_timesteps_per_episode = env.unwrapped.walls_num
 
         goal_avg_episode_length = env.unwrapped.walls_num
@@ -291,11 +341,22 @@ class Controler:
         episode_history.create_plot()
 
         finish_freq = [0.5, True]  # desired percent finishes in window, flag to run subtask once
+
+        startX = np.zeros((500))
+        tmax = 0
         for episode_index in range(0, max_episodes_to_run):
             timestep_index = 0
             observation = env.reset()
+           
+
+            startX[int(observation[0])] += 1
 
             while True:
+                t = observation[1]
+                if (t < tmax):
+                    tmax = t
+                    print(tmax)
+
                 action = agent.choose_action(observation)
                 observation_, reward, done, info = env.step(action)  # Perform the action and observe the new state.
 
@@ -306,7 +367,7 @@ class Controler:
                 if done and timestep_index < max_timesteps_per_episode - 1:
                     reward = -max_episodes_to_run
 
-                QDF = agent.act(observation, action, reward, observation_)
+                QDF = agent.update_q_table(observation, action, reward, observation_)
                 observation = observation_
 
                 if done:
@@ -331,7 +392,8 @@ class Controler:
                     timestep_index += 1
         print("Goal not reached after {} episodes.".format(max_episodes_to_run))
         end_index = max_episodes_to_run
-        #print(agent.q_table)
+        print(np.where(startX > 0))
+        np.savetxt("startX.csv", startX, delimiter=",")
         return episode_history, end_index
 
     def done_manager(self, episode_ind, plt, top, mode):
@@ -339,7 +401,7 @@ class Controler:
         # result files, pictures etc
 
         if mode == 'D':  # work with history data
-            refresh_each = 100
+            refresh_each = 1000
             self.agent_history.append(self.env.unwrapped.wall_iterator)
             if episode_ind % refresh_each == 0 and self.history_f:
                 root = self.exp_dir.split('/')[0]
@@ -369,8 +431,8 @@ class Controler:
                 return prc >= top[0] and total_finishes > 100
 
     def video_callable(episode_id):
-        # call agent draw eact N episodes
-        return episode_id % 300 == 0
+        # call agent draw each N episodes
+        return episode_id % 3000 == 0 or episode_id == 9999
 
     def log_timestep(self, index, action, reward, observation):
         # print parameters in console
