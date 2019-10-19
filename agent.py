@@ -68,10 +68,9 @@ class TetrisRaceQLearningAgent:
 
         if (value_right == value_left):
             action = rnd.randint(self.ACTION_LEFT(), self.ACTION_RIGHT())
-            #print("RND action")
 
-        if (value_right < value_left): # select action with max value
-            action = self.ACTION_LEFT()
+        if (value_right > value_left): # select action with max value
+            action = self.ACTION_RIGHT()
 
         return action 
 
@@ -117,13 +116,6 @@ class TetrisRaceQLearningAgent:
 
     def ACTION_RIGHT(self):
         return  1;
-
-    def Q_ACT_LEFT(self):
-        return  self.ACTION_LEFT() + 1
-
-    def Q_ACT_RIGHT(self):
-        return  self.ACTION_RIGHT() + 1
-
 
     def is_state_exists(self, state_id):
         q_tbl = self.q_table
