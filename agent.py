@@ -38,10 +38,9 @@ class TetrisRaceQLearningAgent:
 
         self.wall_iterator = env.unwrapped.wall_iterator # passed walls counter
         
-        self.screen_width = env.screen_width
+        self.screen_width = env.unwrapped.screen_width
 
-
-        self.q_table = np.empty((0,2))
+        self.q_table = self.init_q_table()
 
     def choose_action(self, observation):
         # =============== TODO: Your code here ===============
@@ -61,22 +60,22 @@ class TetrisRaceQLearningAgent:
 
         state = self.get_state(state_id)
 
-        action = 0
+        action = self.ACTION_LEFT()
         # idx 1 left, idx 2 right
         
-        if (state[1] == state[2]):
-            action = rnd.randint(0, 1)
+        value_right = self.get_state_action_value(state, self.ACTION_RIGHT())
+        value_left  = self.get_state_action_value(state, self.ACTION_LEFT())
+
+        if (value_right == value_left):
+            action = rnd.randint(self.ACTION_LEFT(), self.ACTION_RIGHT())
             #print("RND action")
 
-        if (state[1] < state[2]): # select action with max value
-            action = 1
-            #print("MAX")
-
-        #action = np.random.choice(self.actions)
+        if (value_right < value_left): # select action with max value
+            action = self.ACTION_LEFT()
 
         return action 
 
-    def update_q_table(self, state, action, reward, state_):
+    def update_q_table(self, observation, action, reward, observation_):
         # =============== TODO: Your code here ===============
         #  Here agent takes action('moves' somewhere), knowing
         #  the value of Q - table, corresponds current state.
@@ -84,53 +83,47 @@ class TetrisRaceQLearningAgent:
         #  'Q-value' can become 'better' or 'worsen'. So,
         #   an agent can update knowledge about env, updating Q-table.
         #   Remember that agent should choose max of Q-value in  each step
-        self.check_state_exist(state_[2])
-
-        #update q table val for state (prev) / state_ (new)
-        g_state  = state[2]
-        g_state_ = state_[2]
-        q_tbl = self.q_table
-
-        #print("old")
-        #print(g_state)
-
-        #print("new")
-        #print(g_state_)
-
-        qSA = q_tbl[q_tbl[:,0] == g_state, ][0] # get state values for current state
-        qSA_idx = np.where((q_tbl[:,0] == g_state) == True)[0][0] # get q_table idx for current state
-        #print("q_table idx")
-        #print(qSA_idx)
         
-        qSA_ = q_tbl[q_tbl[:,0] == g_state_, ][0] # get state values for next state
-        #print(qSA)
-        #print(qSA[1])
-        #print(qSA[2])
-        action_value = qSA[action + 1] + self.learning_rate / 100 * (reward + self.discount_factor / 100 * max(qSA_[1], qSA_[2]) - qSA[action + 1])
+        new_state_id = observation_[2]
+        state_id = observation[2]
 
-        self.q_table[qSA_idx, action + 1] = action_value        
-       
+        if (self.is_state_exists(new_state_id) == False):
+            self.add_new_state(new_state_id)
+
+        qSA  = self.get_state(state_id) # get state values for current state        
+        qSA_ = self.get_state(new_state_id) # get state values for next state
+
+        action_value = self.get_state_action_value(qSA, action)
+
+        max_action_value_of_new_state = max(self.get_state_action_value(qSA_, self.ACTION_LEFT()), self.get_state_action_value(qSA_, self.ACTION_RIGHT()))
+
+        action_value_new = action_value + self.learning_rate / 100 * (reward + self.discount_factor / 100 * max_action_value_of_new_state - action_value)
+
+        self.update_state_value(state_id, action, action_value_new)  
+        
         return self.q_table
 
-    def check_state_exist(self, state):
-        # =============== TODO: Your code here ===============
-        #  Here agent can write to Q-table new data vector if current
-        #  state is unknown for the moment
-
-        q_tbl = self.q_table
-
-
-        if (len(q_tbl[q_tbl[:,0] == state, 0]) == 0):
-        #    print("STATE NEW")
-            self.q_table = np.vstack((q_tbl, np.array([state,0,0])))
-        #else:
-        #    print("STATE exists")
-
-        pass
-
 #==========================================================================================================
 #==========================================================================================================
 #==========================================================================================================
+        
+    
+
+    def init_q_table(self):
+        return np.empty((0,3))
+
+    def ACTION_LEFT(self):
+        return  0;
+
+    def ACTION_RIGHT(self):
+        return  1;
+
+    def Q_ACT_LEFT(self):
+        return  self.ACTION_LEFT() + 1
+
+    def Q_ACT_RIGHT(self):
+        return  self.ACTION_RIGHT() + 1
+
 
     def is_state_exists(self, state_id):
         q_tbl = self.q_table
@@ -148,7 +141,12 @@ class TetrisRaceQLearningAgent:
             raise Exception("State does not exists")
         return self.q_table[self.q_table[:,0] == state_id, ][0]
 
+    def update_state_value(self, state_id, action, value):
+        qSA_idx = np.where((self.q_table[:,0] == state_id) == True)[0][0]
+        self.q_table[qSA_idx, action + 1] = value
 
+    def get_state_action_value(self, state, action):
+        return state[action + 1]
 
 
 class EpisodeHistory:
@@ -256,8 +254,8 @@ class Controler:
         random_state = 0
         self.agent_history = []
         self.history_f = True
-        self.learning_rate = 100
-        self.discount_factor = 70
+        self.learning_rate = 90
+        self.discount_factor = 30
 
         self.window = 50
 
