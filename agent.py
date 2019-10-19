@@ -38,10 +38,10 @@ class TetrisRaceQLearningAgent:
 
         self.wall_iterator = env.unwrapped.wall_iterator # passed walls counter
         
-        self.screen_width = env.screen_width
+        self.screen_width = env.unwrapped.screen_width
 
 
-        self.q_table = np.empty((0,2))
+        self.q_table = np.empty((0,3))
 
     def choose_action(self, observation):
         # =============== TODO: Your code here ===============
