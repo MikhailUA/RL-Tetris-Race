@@ -7,6 +7,7 @@ import time
 import pickle
 import warnings
 import random as rnd
+import math
 warnings.filterwarnings("ignore")
 
 global team_name, folder, env_name
@@ -39,8 +40,10 @@ class TetrisRaceQLearningAgent:
         self.wall_iterator = env.unwrapped.wall_iterator # passed walls counter
         
         self.screen_width = env.unwrapped.screen_width
-
+        self.n_bins = 100
+        self.x_space = np.linspace(0, 400, self.n_bins)
         self.q_table = self.init_q_table()
+        self.maxT = 1
 
     def choose_action(self, observation):
         # =============== TODO: Your code here ===============
@@ -53,8 +56,11 @@ class TetrisRaceQLearningAgent:
         #  Think about right proportion that parameters for better solution
         
 
-        state_id = observation[2]
 
+        state_id = int(observation[1]) *-1
+        x = int(observation[0])
+        x = np.digitize(x, self.x_space)
+        #print(state_id)
         if (self.is_state_exists(state_id) == False):
             self.add_new_state(state_id)
 
@@ -63,14 +69,36 @@ class TetrisRaceQLearningAgent:
         action = self.ACTION_LEFT()
         # idx 1 left, idx 2 right
         
-        value_right = self.get_state_action_value(state, self.ACTION_RIGHT())
-        value_left  = self.get_state_action_value(state, self.ACTION_LEFT())
+        value_right = self.get_state_action_value(state, x, self.ACTION_RIGHT())
+        value_left  = self.get_state_action_value(state, x, self.ACTION_LEFT())
 
+        if (self.maxT < state_id):
+            self.maxT = state_id
+
+        e = 1 - 1 / (1 + math.exp(-state_id / 80) + 3)
+        e = state_id / (self.maxT) + 0.3
+        #print(e)
+
+        e_rand = rnd.randint(0, 100) / 100
+
+ 
+        greedy = True
         if (value_right == value_left):
             action = rnd.randint(self.ACTION_LEFT(), self.ACTION_RIGHT())
-
-        if (value_right > value_left): # select action with max value
+            #action = self.ACTION_LEFT()
+        elif (value_right > value_left): # select action with max value
             action = self.ACTION_RIGHT()
+         
+        if (e < e_rand):
+            greedy = False
+
+        #print(greedy)
+        if (greedy == False and action == self.ACTION_RIGHT() and value_right > value_left):
+            #print(action)
+            action == self.ACTION_LEFT()
+            #print(action)
+        elif(greedy == False and action == self.ACTION_LEFT() and value_right < value_left):
+            action == self.ACTION_RIGHT()
 
         return action 
 
@@ -83,8 +111,14 @@ class TetrisRaceQLearningAgent:
         #   an agent can update knowledge about env, updating Q-table.
         #   Remember that agent should choose max of Q-value in  each step
         
-        new_state_id = observation_[2]
-        state_id = observation[2]
+        new_state_id = int(observation_[1]) *-1
+        state_id = int(observation[1]) *-1
+
+        new_state_id_x = int(observation_[0])
+        state_id_x = int(observation[0])
+
+        new_state_id_x = np.digitize(new_state_id_x, self.x_space)
+        state_id_x = np.digitize(state_id_x, self.x_space)
 
         if (self.is_state_exists(new_state_id) == False):
             self.add_new_state(new_state_id)
@@ -92,53 +126,59 @@ class TetrisRaceQLearningAgent:
         qSA  = self.get_state(state_id) # get state values for current state        
         qSA_ = self.get_state(new_state_id) # get state values for next state
 
-        action_value = self.get_state_action_value(qSA, action)
+        action_value = self.get_state_action_value(qSA, state_id_x, action)
 
-        max_action_value_of_new_state = max(self.get_state_action_value(qSA_, self.ACTION_LEFT()), self.get_state_action_value(qSA_, self.ACTION_RIGHT()))
+        max_action_value_of_new_state = max(
+            self.get_state_action_value(qSA_, new_state_id_x, self.ACTION_LEFT()), 
+            self.get_state_action_value(qSA_, new_state_id_x, self.ACTION_RIGHT())
+            )
 
-        action_value_new = action_value + self.learning_rate / 100 * (reward + self.discount_factor / 100 * max_action_value_of_new_state - action_value)
+        lr = (1 - state_id / (self.maxT + 0.0001) ) * self.learning_rate / 100
+        #print(state_id)
+        #print(lr)
 
-        self.update_state_value(state_id, action, action_value_new)  
-        
+        action_value_new = action_value + lr * (reward + self.discount_factor / 100 * max_action_value_of_new_state - action_value)
+
+        self.update_state_value(state_id, state_id_x, action, action_value_new)  
+
         return self.q_table
 
 #==========================================================================================================
 #==========================================================================================================
 #==========================================================================================================
         
-    
 
-    def init_q_table(self):
-        return np.empty((0,3))
+
+    def init_q_table(self):  # updated
+        return np.empty((0, self.n_bins, 2))
 
     def ACTION_LEFT(self):
-        return  0;
+        return  0
 
     def ACTION_RIGHT(self):
-        return  1;
+        return  1
 
-    def is_state_exists(self, state_id):
+    def is_state_exists(self, state_id): # updated
         q_tbl = self.q_table
-        if (len(q_tbl[q_tbl[:,0] == state_id, 0]) > 0):
+        if (len(q_tbl) - 1 >= state_id):
             return True
         return False
 
-    def add_new_state(self, state_id):
+    def add_new_state(self, state_id): # updated
         if (self.is_state_exists(state_id)):
             raise Exception("State already exists")
-        self.q_table = np.vstack((self.q_table, np.array([state_id, 0, 0])))
+        self.q_table = np.vstack((self.q_table, [np.zeros((self.n_bins,2))] ))
 
-    def get_state(self, state_id):
+    def get_state(self, state_id): # updated
         if (self.is_state_exists(state_id) == False):
             raise Exception("State does not exists")
-        return self.q_table[self.q_table[:,0] == state_id, ][0]
+        return self.q_table[state_id]
 
-    def update_state_value(self, state_id, action, value):
-        qSA_idx = np.where((self.q_table[:,0] == state_id) == True)[0][0]
-        self.q_table[qSA_idx, action + 1] = value
+    def update_state_value(self, state_id, x, action, value):   # updated      
+        self.q_table[state_id, x, action] = value
 
-    def get_state_action_value(self, state, action):
-        return state[action + 1]
+    def get_state_action_value(self, state, x, action): # updated
+        return state[x, action]
 
 
 class EpisodeHistory:
@@ -246,8 +286,8 @@ class Controler:
         random_state = 0
         self.agent_history = []
         self.history_f = True
-        self.learning_rate = 90
-        self.discount_factor = 30
+        self.learning_rate = 100
+        self.discount_factor = 100
 
         self.window = 50
 
@@ -383,7 +423,13 @@ class Controler:
         print("Goal not reached after {} episodes.".format(max_episodes_to_run))
         end_index = max_episodes_to_run
         print(np.where(startX > 0))
-        np.savetxt("startX.csv", startX, delimiter=",")
+
+        x = agent.q_table.shape[0]
+        y = agent.q_table.shape[1]
+        z = agent.q_table.shape[2]
+
+
+        np.savetxt("q_table.csv", np.reshape(agent.q_table, (x,y*z)) , delimiter=",")
         return episode_history, end_index
 
     def done_manager(self, episode_ind, plt, top, mode):
@@ -422,7 +468,7 @@ class Controler:
 
     def video_callable(episode_id):
         # call agent draw each N episodes
-        return episode_id % 3000 == 0 or episode_id == 9999
+        return episode_id % 1000 == 0 or episode_id == 8999
 
     def log_timestep(self, index, action, reward, observation):
         # print parameters in console
@@ -490,7 +536,7 @@ class Classification:
 
 def main(env, parent_mode = True):
     obj = Controler
-    obj.__init__(obj, parent_mode= parent_mode, global_env= env)
+    obj.__init__(obj, parent_mode= parent_mode, global_env= env,episodes_num = 9000)
 
 if __name__ == "__main__":
     if 'master.py' not in os.listdir('.'):

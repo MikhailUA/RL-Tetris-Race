@@ -1,1 +1,3 @@
 /tetris_race_qlearning/*
+*.csv
+*.xlsx

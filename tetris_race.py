@@ -26,7 +26,7 @@ class TetrisRaceEnv(gym.Env):
     }
 
     def __init__(self, walls_num = 60, walls_spread = 5, episodes_to_run = 30,
-                 world_type = 'Fat',smooth_car_step = 5, level_difficulty ='Easy', car_spawn = 'Random'):
+                 world_type = 'Fat', smooth_car_step = 5, level_difficulty ='Easy', car_spawn = 'Random'):
         super(TetrisRaceEnv, self).__init__()
     # unmutable gui var
         self.screen_width = 400
